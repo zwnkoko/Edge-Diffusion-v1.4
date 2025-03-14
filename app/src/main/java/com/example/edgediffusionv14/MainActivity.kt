@@ -5,18 +5,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
@@ -28,7 +25,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -52,10 +48,10 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.runtime.mutableIntStateOf
 
+import com.example.edgediffusionv14.ui.components.DenoiseSteps
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -72,6 +68,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiffusionApp() {
+    var denoiseSteps by remember { mutableIntStateOf(30) }
     var promptText by remember { mutableStateOf("") }
     var isGpuEnabled by remember { mutableStateOf(false) }
     val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
@@ -126,44 +123,11 @@ fun DiffusionApp() {
                             .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Denoise Steps:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        var denoiseSteps by remember { mutableStateOf(20) }
-
-                        IconButton(
-                            onClick = { if (denoiseSteps > 1) denoiseSteps-- },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Remove,
-                                contentDescription = "Decrease steps",
-                                tint = MaterialTheme.colorScheme.primary
+                        DenoiseSteps(
+                            label = "Denoise Steps",
+                            denoisingSteps = denoiseSteps,
+                            onValueChange = { newValue -> denoiseSteps = newValue },
                             )
-                        }
-
-                        Text(
-                            text = denoiseSteps.toString(),
-                            modifier = Modifier.padding(horizontal = 4.dp),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        IconButton(
-                            onClick = { if (denoiseSteps < 100) denoiseSteps++ },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Increase steps",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
                     }
                 }
 
