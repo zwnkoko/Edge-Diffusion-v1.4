@@ -19,13 +19,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun DenoiseSteps(
+fun StepControl(
+    modifier: Modifier = Modifier,
     label: String,
     denoisingSteps: Int,
     onValueChange: (Int) -> Unit,
     lowLimit : Int = 1,
     upLimit: Int = 100,
-    modifier: Modifier = Modifier) {
+    ) {
     Row(
         modifier = modifier.fillMaxHeight(),
         verticalAlignment = Alignment.CenterVertically
