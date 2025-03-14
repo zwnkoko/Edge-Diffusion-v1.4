@@ -36,7 +36,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -51,11 +50,14 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.Modifier
 
 import com.example.edgediffusionv14.ui.components.StepControl
 import com.example.edgediffusionv14.ui.components.SegmentedControl
 import com.example.edgediffusionv14.ui.components.ImageDisplay
+import com.example.edgediffusionv14.ui.components.PromptField
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -185,70 +187,15 @@ fun DiffusionApp() {
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(containerColor = surfaceColor)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = promptText,
-                        onValueChange = { promptText = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 56.dp, max = 120.dp), // Allows text field to grow up to a maximum height
-                        placeholder = { Text("Describe what you want to create...") },
-                        shape = RoundedCornerShape(24.dp),
-                        singleLine = false, // Allow multiple lines
-                        maxLines = 4, // Limit to 4 lines maximum
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent,
-                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = MaterialTheme.colorScheme.outlineVariant
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Rewrite button
-                    IconButton(
-                        onClick = { /* TODO: Implement prompt rewriting logic */ },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.secondaryContainer)
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(12.dp)
-                            ),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoFixHigh,
-                            contentDescription = "Rewrite Prompt",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                    FloatingActionButton(
-                        onClick = { /* TODO: Handle prompt submission */ },
-                        modifier = Modifier
-                            .padding(start = 12.dp)
-                            .size(48.dp),
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = FloatingActionButtonDefaults.elevation(
-                            defaultElevation = 2.dp,
-                            pressedElevation = 4.dp
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = "Generate"
-                        )
-                    }
-                }
+                PromptField(
+                    modifier = Modifier.padding(12.dp),
+                    rewriteBtn = true,
+                    placeHolderText = "Describe the image to generate",
+                    promptText = promptText,
+                    onPromptChange = { newPrompt -> promptText = newPrompt },
+                    onRewriteClick = { /* TODO */ },
+                    onSubmit = { println(promptText) }
+                )
             }
         }
     }
