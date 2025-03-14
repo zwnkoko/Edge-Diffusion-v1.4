@@ -53,7 +53,9 @@ import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.mutableIntStateOf
 
-import com.example.edgediffusionv14.ui.components.DenoiseSteps
+import com.example.edgediffusionv14.ui.components.StepControl
+import com.example.edgediffusionv14.ui.components.SegmentedControl
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,6 +72,8 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiffusionApp() {
+    val deviceOptions = listOf("CPU", "GPU")
+    var selectedProcessor by remember { mutableStateOf("CPU") }
     var denoiseSteps by remember { mutableIntStateOf(30) }
     var promptText by remember { mutableStateOf("") }
     var isGpuEnabled by remember { mutableStateOf(false) }
@@ -125,11 +129,11 @@ fun DiffusionApp() {
                             .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DenoiseSteps(
+                        StepControl(
                             label = "Denoise Steps",
                             denoisingSteps = denoiseSteps,
                             onValueChange = { newValue -> denoiseSteps = newValue },
-                            )
+                        )
                     }
                 }
 
@@ -144,52 +148,13 @@ fun DiffusionApp() {
                         color = MaterialTheme.colorScheme.outlineVariant,
                         shape = RoundedCornerShape(24.dp)
                     )
+                        .height(48.dp) // Match height with CPU/GPU card
                 ) {
-                    Row(modifier = Modifier.padding(4.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(
-                                    if (!isGpuEnabled)
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    else
-                                        Color.Transparent
-                                )
-                                .clickable { isGpuEnabled = false }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "CPU",
-                                color = if (!isGpuEnabled)
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                else
-                                    MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(
-                                    if (isGpuEnabled)
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    else
-                                        Color.Transparent
-                                )
-                                .clickable { isGpuEnabled = true }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "GPU",
-                                color = if (isGpuEnabled)
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                else
-                                    MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
+                    SegmentedControl(
+                        options = deviceOptions,
+                        selectedOption = selectedProcessor,
+                        onValueChange = { option -> selectedProcessor = option },
+                    )
                 }
             }
 
