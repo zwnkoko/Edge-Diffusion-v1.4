@@ -55,7 +55,7 @@ import androidx.compose.runtime.mutableIntStateOf
 
 import com.example.edgediffusionv14.ui.components.StepControl
 import com.example.edgediffusionv14.ui.components.SegmentedControl
-
+import com.example.edgediffusionv14.ui.components.ImageDisplay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,7 +76,6 @@ fun DiffusionApp() {
     var selectedProcessor by remember { mutableStateOf("CPU") }
     var denoiseSteps by remember { mutableIntStateOf(30) }
     var promptText by remember { mutableStateOf("") }
-    var isGpuEnabled by remember { mutableStateOf(false) }
     val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
 
     Scaffold(
@@ -168,35 +167,13 @@ fun DiffusionApp() {
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = surfaceColor)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(2.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Image,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Your creation will appear here",
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                ImageDisplay(
+                    modifier = Modifier.background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                    ),
+                    placeHolderText = "Generated image will appear here",
+                    imagePath = null
+                )
             }
 
             // Prompt input
