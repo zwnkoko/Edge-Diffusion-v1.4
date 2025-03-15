@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -22,6 +23,7 @@ fun SegmentedControl(
     boxPadding: Modifier = Modifier.padding(horizontal = 16.dp),
     options: List<String>,
     selectedOption: String,
+    textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
     onValueChange: (String) -> Unit
 ) {
     Row(modifier = modifier.padding(4.dp).fillMaxHeight()) {
@@ -48,7 +50,8 @@ fun SegmentedControl(
             ) {
                 Text(
                     text = option,
-                    color = textColor
+                    color = textColor,
+                    style = textStyle
                 )
             }
         }

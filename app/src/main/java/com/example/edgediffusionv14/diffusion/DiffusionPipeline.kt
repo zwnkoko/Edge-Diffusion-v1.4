@@ -17,10 +17,22 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
-import kotlin.collections.get
-import kotlin.ranges.step
-import kotlin.run
-import kotlin.text.toLong
+import com.example.edgediffusionv14.diffusion.utils.LatentNoiseGenerator.generateGaussianNoise
+
+// Add this outside your class, at the top level of the file
+private fun Array<Array<Array<FloatArray>>>.flatten(): List<Float> {
+    val result = mutableListOf<Float>()
+    for (batch in this) {
+        for (channel in batch) {
+            for (row in channel) {
+                for (value in row) {
+                    result.add(value)
+                }
+            }
+        }
+    }
+    return result
+}
 
 class DiffusionPipeline (
     private val context: Context,
@@ -121,10 +133,29 @@ class DiffusionPipeline (
         encodedPrompt: FloatArray,
         encodedPromptShape : LongArray,
         numSteps: Int,
-        progressCallback: (Int, Int) -> Unit = { _, _ -> }
+        progressCallback: (Int, Int) -> Unit = { _, _ -> },
+        randomSeed: Boolean,
     ): Bitmap? {
-        var latentTensor = LatentUtil.loadLatentsFromFile(context, "diffusion/latents.bin")
-        val latenTensorFloat = latentTensor.dataAsFloatArray
+        var latentTensor: Tensor
+       // var latentTensor = LatentUtil.loadLatentsFromFile(context, "diffusion/latents.bin")
+        // Generate noise as a 4D array
+        if (randomSeed){
+            val noiseArray = generateGaussianNoise(1, 4, 64, 64)
+
+            // Convert the 4D array to a flat FloatArray
+            val flattenedNoise = noiseArray.flatten().toFloatArray()
+
+            // Create a Tensor from the flattened array with proper shape
+            latentTensor = Tensor.fromBlob(
+                flattenedNoise,
+                longArrayOf(1, 4, 64, 64)
+            )
+        } else {
+            latentTensor = LatentUtil.loadLatentsFromFile(context, "diffusion/latents.bin")
+        }
+
+
+        //val latenTensorFloat = latentTensor.dataAsFloatArray
 
         scheduler.setTimesteps(numSteps)
         var timeSteps = scheduler.getTimeSteps()
@@ -291,7 +322,7 @@ class DiffusionPipeline (
         ortSession.close()
         println("First 10 values: ${data.take(10).joinToString()}")
         println("Last 10 values: ${data.takeLast(10).joinToString()}")
-
+        progressCallback(-1, -1)
         // --- VAE Decoding ---
 
         // 1. Scale the latents
@@ -330,7 +361,8 @@ class DiffusionPipeline (
 
 
         val vaeOutputData = vaeOutputTensor?.floatBuffer
-
+        vaeOrtSession.close()
+        ortEnv.close()
         // Convert VAE output to an image
         if(vaeOutputData != null && vaeOutputShape != null) {
             val image = convertToImage(vaeOutputData, vaeOutputShape)

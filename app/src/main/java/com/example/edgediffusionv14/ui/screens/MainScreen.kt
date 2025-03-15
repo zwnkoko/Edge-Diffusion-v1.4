@@ -40,23 +40,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.graphics.Bitmap
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     viewModel: DiffusionViewModel = viewModel()
 ) {
-    val deviceOptions = listOf("CPU", "GPU")
-    var selectedProcessor by remember { mutableStateOf("CPU") }
+    val seedOption = listOf("Seed 0", "Random", )
+    var selectedSeed by remember { mutableStateOf("Random") }
     var denoiseSteps by remember { mutableIntStateOf(20) }
     var promptText by remember { mutableStateOf("") }
-    var statusProgress by remember { mutableStateOf(listOf<String>("Status...ready")) }
+    var statusProgress by remember { mutableStateOf(listOf<String>("")) }
     val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
     var generatedBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     val diffusionPipeline = viewModel.diffusionPipeline
 
     fun generateImage() {
+        // To reset UI
+        generatedBitmap = null
+        statusProgress = listOf("Status...ready")
         println("Generating image with prompt: $promptText")
         statusProgress = statusProgress + listOf("Encoding prompt...")
 
@@ -85,13 +91,18 @@ fun MainScreen(
                     progressCallback = { step: Int, totalSteps: Int ->
                         // Update UI on the main thread
                         launch(Dispatchers.Main) {
-                            statusProgress = statusProgress + "Generating step ${step}/${totalSteps}"
+                            statusProgress = if(step == -1 && totalSteps == -1){
+                                statusProgress + "VAE - Converting latent space to image..."
+                            } else{
+                                statusProgress + "Generating step ${step}/${totalSteps}"
+                            }
+
                         }
-                    }
+                    },
+                    randomSeed = selectedSeed == "Random"
                 )
             }
 
-            statusProgress = statusProgress + listOf("Image generation complete")
             generatedBitmap = bitmap
 
         }
@@ -155,7 +166,7 @@ fun MainScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Processing mode selector (CPU/GPU)
+                // Seed mode selector
                 Card(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = surfaceColor),
@@ -168,9 +179,10 @@ fun MainScreen(
                         .height(48.dp)
                 ) {
                     SegmentedControl(
-                        options = deviceOptions,
-                        selectedOption = selectedProcessor,
-                        onValueChange = { option -> selectedProcessor = option },
+                        options = seedOption,
+                        selectedOption = selectedSeed,
+                        onValueChange = { option -> selectedSeed = option },
+                        textStyle = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -197,12 +209,17 @@ fun MainScreen(
 
                         )
                     }
-
-                    Text(
-                        text = statusProgress.joinToString("\n"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    Box( modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                    ){
+                        Text(
+                            text = statusProgress.joinToString("\n"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
                 } else {
                     ImageDisplay(
                         modifier = Modifier.fillMaxSize(),
