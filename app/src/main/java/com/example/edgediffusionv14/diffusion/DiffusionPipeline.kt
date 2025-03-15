@@ -121,6 +121,7 @@ class DiffusionPipeline (
         encodedPrompt: FloatArray,
         encodedPromptShape : LongArray,
         numSteps: Int,
+        progressCallback: (Int, Int) -> Unit = { _, _ -> }
     ): Bitmap? {
         var latentTensor = LatentUtil.loadLatentsFromFile(context, "diffusion/latents.bin")
         val latenTensorFloat = latentTensor.dataAsFloatArray
@@ -167,8 +168,11 @@ class DiffusionPipeline (
 
         val guidanceScale = 7.5f
         if (timeSteps != null) {
+            var counter = 1
             for(timestep in timeSteps){
                 println("current timestep ${timestep}")
+                progressCallback(counter, timeSteps.size)
+                counter = counter + 1
                 // Create a new FloatArray to hold the concatenated data
                 val combinedData = FloatArray(data.size * 2)
 

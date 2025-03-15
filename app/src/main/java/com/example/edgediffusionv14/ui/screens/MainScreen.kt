@@ -72,17 +72,25 @@ fun MainScreen(
                 statusProgress = statusProgress + listOf("Encoding prompt... failed")
                 return@launch
             }
-            statusProgress = statusProgress + listOf("Encoding prompt... complete")
             statusProgress = statusProgress + listOf("Generating image...")
             statusProgress = statusProgress + listOf("Fetching UNET file...")
 
+
+            // Generate image with progress updates and get the final result
             val bitmap = withContext(Dispatchers.IO) {
                 diffusionPipeline.generateImage(
                     encodedPrompt = encodedPromptData,
                     encodedPromptShape = encodedPromptShape,
                     numSteps = denoiseSteps,
+                    progressCallback = { step: Int, totalSteps: Int ->
+                        // Update UI on the main thread
+                        launch(Dispatchers.Main) {
+                            statusProgress = statusProgress + "Generating step ${step}/${totalSteps}"
+                        }
+                    }
                 )
             }
+
             statusProgress = statusProgress + listOf("Image generation complete")
             generatedBitmap = bitmap
 
