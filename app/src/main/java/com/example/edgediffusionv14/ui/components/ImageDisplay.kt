@@ -1,5 +1,6 @@
 package com.example.edgediffusionv14.ui.components
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,40 +21,62 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 
 @Composable
 fun ImageDisplay(
     modifier: Modifier = Modifier,
     placeHolderText: String,
-    imagePath: String?,
+    bitmap: Bitmap? = null
 ) {
-    //Show placeholder if no image path is provided
-    if(imagePath.isNullOrEmpty()){
-        Box(modifier = modifier
-            .fillMaxSize()
-            .padding(2.dp)
-            .clip(RoundedCornerShape(22.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+    // Show bitmap if available
+    when {
+        bitmap != null -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(2.dp)
+                    .clip(RoundedCornerShape(22.dp)),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Image,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = placeHolderText,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Generated image",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }
+        // Show placeholder if no image path or bitmap
+        else -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(2.dp)
+                    .clip(RoundedCornerShape(22.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = placeHolderText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
     }
-
 }

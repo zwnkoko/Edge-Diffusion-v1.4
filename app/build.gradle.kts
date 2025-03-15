@@ -57,4 +57,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation("androidx.compose.material:material-icons-extended:1.5.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
+    implementation("org.pytorch:pytorch_android:2.1.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:latest.release")
 }

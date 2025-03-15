@@ -29,19 +29,65 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.edgediffusionv14.ui.components.ImageDisplay
 import com.example.edgediffusionv14.ui.components.PromptField
 import com.example.edgediffusionv14.ui.components.SegmentedControl
 import com.example.edgediffusionv14.ui.components.StepControl
+import com.example.edgediffusionv14.ui.viewmodels.DiffusionViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.graphics.Bitmap
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    viewModel: DiffusionViewModel = viewModel()
+) {
     val deviceOptions = listOf("CPU", "GPU")
     var selectedProcessor by remember { mutableStateOf("CPU") }
-    var denoiseSteps by remember { mutableIntStateOf(30) }
+    var denoiseSteps by remember { mutableIntStateOf(20) }
     var promptText by remember { mutableStateOf("") }
+    var statusProgress by remember { mutableStateOf(listOf<String>("Status...ready")) }
     val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+    var generatedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    val diffusionPipeline = viewModel.diffusionPipeline
+
+    fun generateImage() {
+        println("Generating image with prompt: $promptText")
+        statusProgress = statusProgress + listOf("Encoding prompt...")
+
+        // Launch a coroutine for background processing
+        viewModel.viewModelScope.launch {
+            // Run background thread to prevent UI thread blocking
+            val (encodedPromptData, encodedPromptShape)  = withContext(Dispatchers.IO) {
+                diffusionPipeline.encodePrompt(promptText)
+            }
+
+            // Execution returns back to mainthread here
+            if (encodedPromptData == null || encodedPromptShape == null) {
+                statusProgress = statusProgress + listOf("Encoding prompt... failed")
+                return@launch
+            }
+            statusProgress = statusProgress + listOf("Encoding prompt... complete")
+            statusProgress = statusProgress + listOf("Generating image...")
+            statusProgress = statusProgress + listOf("Fetching UNET file...")
+
+            val bitmap = withContext(Dispatchers.IO) {
+                diffusionPipeline.generateImage(
+                    encodedPrompt = encodedPromptData,
+                    encodedPromptShape = encodedPromptShape,
+                    numSteps = denoiseSteps,
+                )
+            }
+            statusProgress = statusProgress + listOf("Image generation complete")
+            generatedBitmap = bitmap
+
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -105,11 +151,12 @@ fun MainScreen() {
                 Card(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = surfaceColor),
-                    modifier = Modifier.border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                        shape = RoundedCornerShape(24.dp)
-                    )
+                    modifier = Modifier
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                            shape = RoundedCornerShape(24.dp)
+                        )
                         .height(48.dp)
                 ) {
                     SegmentedControl(
@@ -130,13 +177,31 @@ fun MainScreen() {
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = surfaceColor)
             ) {
-                ImageDisplay(
-                    modifier = Modifier.background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                    ),
-                    placeHolderText = "Generated image will appear here",
-                    imagePath = null
-                )
+                if (generatedBitmap == null) {
+                    Row (
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "Progress Status",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(16.dp)
+
+                        )
+                    }
+
+                    Text(
+                        text = statusProgress.joinToString("\n"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    ImageDisplay(
+                        modifier = Modifier.fillMaxSize(),
+                        placeHolderText = "Generated image will appear here",
+                        bitmap = generatedBitmap
+                    )
+                }
             }
 
             // Prompt input
@@ -155,7 +220,7 @@ fun MainScreen() {
                     promptText = promptText,
                     onPromptChange = { newPrompt -> promptText = newPrompt },
                     onRewriteClick = { println("Rewrite clicked") },
-                    onSubmit = { println(promptText) }
+                    onSubmit =  { generateImage() }
                 )
             }
         }
