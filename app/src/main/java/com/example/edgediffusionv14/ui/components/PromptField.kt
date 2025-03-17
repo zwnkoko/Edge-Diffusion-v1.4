@@ -26,6 +26,7 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 fun PromptField(
     modifier: Modifier = Modifier,
     rewriteBtn: Boolean,
+    rewriteBtnStatus: Boolean,
     placeHolderText: String,
     promptText: String,
     onPromptChange: (String) -> Unit,
@@ -61,18 +62,28 @@ fun PromptField(
                 modifier = Modifier
                     .padding(start = 12.dp)
                     .size(btnSize.dp),
-                containerColor = MaterialTheme.colorScheme.secondary,
+                containerColor = if (rewriteBtnStatus)
+                    MaterialTheme.colorScheme.secondary
+                else
+                    MaterialTheme.colorScheme.surfaceDim,
                 contentColor = MaterialTheme.colorScheme.onSecondary,
                 shape = RoundedCornerShape(16.dp),
                 elevation = FloatingActionButtonDefaults.elevation(
                     defaultElevation = 2.dp,
                     pressedElevation = 4.dp
                 ),
-                onClick = onRewriteClick
+                onClick = {
+                    if (rewriteBtnStatus) {
+                        onRewriteClick()
+                    }
+                }
             ) {
                 Icon(
                     imageVector = Icons.Default.AutoFixHigh,
-                    contentDescription = "Rewrite Prompt"
+                    contentDescription = if (rewriteBtnStatus)
+                        "Rewrite Prompt"
+                    else
+                        "Rewrite Unavailable"
                 )
             }
         }

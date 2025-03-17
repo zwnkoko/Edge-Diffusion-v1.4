@@ -60,4 +60,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
     implementation("org.pytorch:pytorch_android:2.1.0")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:latest.release")
+
+    // Retrofit for REST API calls
+    implementation ("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation ("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation ("com.squareup.okhttp3:okhttp:4.11.0")
+    implementation ("com.squareup.okhttp3:logging-interceptor:4.11.0")
 }

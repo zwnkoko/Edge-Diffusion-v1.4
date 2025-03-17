@@ -2,7 +2,7 @@ package com.example.edgediffusionv14.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,12 +34,14 @@ import com.example.edgediffusionv14.ui.components.ImageDisplay
 import com.example.edgediffusionv14.ui.components.PromptField
 import com.example.edgediffusionv14.ui.components.SegmentedControl
 import com.example.edgediffusionv14.ui.components.StepControl
+import com.example.edgediffusionv14.ui.components.StatusCheck
 import com.example.edgediffusionv14.ui.viewmodels.DiffusionViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.graphics.Bitmap
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -53,16 +55,23 @@ fun MainScreen(
     var selectedSeed by remember { mutableStateOf("Random") }
     var denoiseSteps by remember { mutableIntStateOf(20) }
     var promptText by remember { mutableStateOf("") }
-    var statusProgress by remember { mutableStateOf(listOf<String>("")) }
+    var statusProgress by remember { mutableStateOf(listOf<String>("Status...ready")) }
     val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
     var generatedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var onsiteLLMAvailable by remember { mutableStateOf<Boolean?>(false) }
 
     val diffusionPipeline = viewModel.diffusionPipeline
+
+
+    viewModel.checkLlmAvailability { isAvailable ->
+        onsiteLLMAvailable = isAvailable
+    }
+
 
     fun generateImage() {
         // To reset UI
         generatedBitmap = null
-        statusProgress = listOf("Status...ready")
+//        statusProgress = listOf("Status...ready")
         println("Generating image with prompt: $promptText")
         statusProgress = statusProgress + listOf("Encoding prompt...")
 
@@ -108,6 +117,23 @@ fun MainScreen(
         }
     }
 
+    fun rewritePrompt(){
+        statusProgress = statusProgress + listOf("Rewriting prompt...")
+        viewModel.makeApiRequest(promptText) { result ->
+            if (result != null) {
+                // Use the rewritten prompt here
+                println("Got rewritten prompt: $result")
+                statusProgress = statusProgress + listOf("Prompt rewritten")
+                promptText = result
+            } else {
+                // Handle error case
+                println("Failed to get rewritten prompt")
+                statusProgress = statusProgress + listOf("Prompt rewrite failed")
+            }
+        }
+
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -131,6 +157,17 @@ fun MainScreen(
                 .background(MaterialTheme.colorScheme.background),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.Start
+            ) {
+                StatusCheck(
+                    label = "On-site LLM Availability",
+                    isActive = onsiteLLMAvailable,
+                )
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -187,6 +224,7 @@ fun MainScreen(
                 }
             }
 
+
             // Image display area
             Card(
                 modifier = Modifier
@@ -241,10 +279,11 @@ fun MainScreen(
                 PromptField(
                     modifier = Modifier.padding(12.dp),
                     rewriteBtn = true,
+                    rewriteBtnStatus = onsiteLLMAvailable == true,
                     placeHolderText = "Describe image to generate",
                     promptText = promptText,
                     onPromptChange = { newPrompt -> promptText = newPrompt },
-                    onRewriteClick = { println("Rewrite clicked") },
+                    onRewriteClick = { rewritePrompt() },
                     onSubmit =  { generateImage() }
                 )
             }
