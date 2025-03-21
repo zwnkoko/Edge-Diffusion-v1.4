@@ -118,7 +118,7 @@ fun MainScreen(
 
                         }
                     },
-                    randomSeed = if (selectedSeed == "Random") null else customSeed.toLong()
+                    randomSeed = if (selectedSeed != "Custom") null else customSeed.toLong()
                 )
             }
 
