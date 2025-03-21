@@ -3,7 +3,6 @@ package com.example.edgediffusionv14.diffusion
 import android.content.Context
 import android.util.Log
 import com.example.edgediffusionv14.diffusion.models.MinimalCLIPTokenizer
-import kotlin.collections.map
 import org.pytorch.IValue
 import org.pytorch.Module
 import org.pytorch.Tensor
@@ -19,7 +18,9 @@ import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import com.example.edgediffusionv14.diffusion.utils.LatentNoiseGenerator.generateGaussianNoise
 
-// Add this outside your class, at the top level of the file
+/**
+ * Helper function to flatten a 4D array into a 1D list
+ */
 private fun Array<Array<Array<FloatArray>>>.flatten(): List<Float> {
     val result = mutableListOf<Float>()
     for (batch in this) {
@@ -34,27 +35,38 @@ private fun Array<Array<Array<FloatArray>>>.flatten(): List<Float> {
     return result
 }
 
-class DiffusionPipeline (
+/**
+ * Stable Diffusion pipeline implementation for on-device text-to-image generation
+ *
+ * This pipeline handles the full text-to-image generation process:
+ * 1. Text encoding (via CLIP)
+ * 2. Denoising diffusion (via U-Net)
+ * 3. Latent decoding (via VAE)
+ */
+class DiffusionPipeline(
     private val context: Context,
-
-    // Tokenizer for the text prompt
     private val tokenizer: MinimalCLIPTokenizer,
     private val batchSize: Int = 1,
-    private val sequenceLength : Int = 77,
-
-    // Scheduler for the diffusion model
+    private val sequenceLength: Int = 77,
     private val scheduler: PNDMScheduler,
-){
+) {
 
+    /**
+     * Encodes the text prompt and negative prompt into embeddings
+     *
+     * @param prompt The text prompt to generate an image from
+     * @param negativePrompt Optional negative prompt to guide what not to include
+     * @return Pair of encoded embeddings (as FloatArray) and the shape information
+     */
     fun encodePrompt(
         prompt: String,
         negativePrompt: String = "",
     ): Pair<FloatArray?, LongArray?> {
-       tokenizer.clearCache()
+        tokenizer.clearCache()
 
-        //1. Tokenize and encode the text prompt
-        var promptList =listOf(prompt)
-        var uncondPromptList = listOf(negativePrompt)
+        // 1. Tokenize and encode the prompts
+        val promptList = listOf(prompt)
+        val uncondPromptList = listOf(negativePrompt)
 
         val encodedPrompt = tokenizer(
             promptList,
@@ -69,12 +81,9 @@ class DiffusionPipeline (
             truncation = true
         )
 
-        // 2. Get input IDs and convert to LongArray (keeping batch dimension)
+        // 2. Get input IDs and convert to LongArray
         val encodedInputIds = encodedPrompt["input_ids"] as List<*>
         val uncondEncodedInputIds = uncondEncodedPrompt["input_ids"] as List<*>
-
-        println("Encoded input IDs: $encodedInputIds")
-        println("Unconditional Encoded input IDs: $uncondEncodedInputIds")
 
         val inputIds = encodedInputIds.map { subList ->
             if (subList is List<*>) {
@@ -92,286 +101,256 @@ class DiffusionPipeline (
             }
         }.toTypedArray()
 
-
-        // 3. Load encoder model
+        // 3. Load text encoder model
         val module = Module.load(FileUtils.assetFilePath(context, "diffusion/text_encoder_pt.pt"))
 
-        // 4. Create the input tensor (for the first batch)
+        // 4. Create the input tensors for both prompts
         val inputTensor = Tensor.fromBlob(inputIds[0], longArrayOf(1, inputIds[0].size.toLong()))
         val uncondInputTensor = Tensor.fromBlob(uncondInputIds[0], longArrayOf(1, uncondInputIds[0].size.toLong()))
 
-        // 5. Run inference
+        // 5. Run text encoder inference
         val textEmbeddings = module.forward(IValue.from(inputTensor)).toTensor()
         val uncondTextEmbeddings = module.forward(IValue.from(uncondInputTensor)).toTensor()
 
         val textEmbeddingsFloat = textEmbeddings.dataAsFloatArray
         val uncondTextEmbeddingsFloat = uncondTextEmbeddings.dataAsFloatArray
 
-        // 6. Process the output
-//        println("Inference Output (first 10 values): ${textEmbeddingsFloat.take(10).joinToString()}")
-//        println("Inference Output (last 10 values): ${textEmbeddingsFloat.takeLast(10).joinToString()}")
-
-        val embeddingSize =  textEmbeddingsFloat.size / (batchSize * sequenceLength)
+        // 6. Merge negative and positive embeddings for classifier-free guidance
+        val embeddingSize = textEmbeddingsFloat.size / (batchSize * sequenceLength)
         val mergedEmbeddings = FloatArray(textEmbeddingsFloat.size + uncondTextEmbeddingsFloat.size)
 
+        // Copy the unconditional embeddings first, then the conditional ones
         System.arraycopy(uncondTextEmbeddingsFloat, 0, mergedEmbeddings, 0, uncondTextEmbeddingsFloat.size)
         System.arraycopy(textEmbeddingsFloat, 0, mergedEmbeddings, uncondTextEmbeddingsFloat.size, textEmbeddingsFloat.size)
 
-        // 3. Create a new tensor from the combined embeddings
+        // 7. Create a merged tensor for classifier-free guidance
         val mergedTensor = Tensor.fromBlob(
             mergedEmbeddings,
-            longArrayOf(2, sequenceLength.toLong(), embeddingSize.toLong()) // New shape: [2, 77, embeddingSize]
+            longArrayOf(2, sequenceLength.toLong(), embeddingSize.toLong()) // Shape: [2, 77, embeddingSize]
         )
         val mergedTensorFloat = mergedTensor.dataAsFloatArray
 
-//        println("Merged Tensor (first 10 values): ${mergedTensorFloat.take(10).joinToString()}")
-
         return Pair(mergedTensorFloat, mergedTensor.shape())
-
     }
 
+    /**
+     * Generates an image from the encoded prompt using diffusion
+     *
+     * @param encodedPrompt The encoded prompt embeddings from encodePrompt
+     * @param encodedPromptShape Shape information for the encoded prompt
+     * @param numSteps Number of denoising steps to perform
+     * @param progressCallback Optional callback for progress updates
+     * @param randomSeed Optional seed for reproducible generation
+     * @return The generated image as a Bitmap, or null if generation failed
+     */
     fun generateImage(
         encodedPrompt: FloatArray,
-        encodedPromptShape : LongArray,
+        encodedPromptShape: LongArray,
         numSteps: Int,
         progressCallback: (Int, Int) -> Unit = { _, _ -> },
         randomSeed: Long?,
     ): Bitmap? {
-        var latentTensor: Tensor
-       // var latentTensor = LatentUtil.loadLatentsFromFile(context, "diffusion/latents.bin")
-        // Generate noise as a 4D array
-        if (randomSeed != null){
+        // Initialize latent tensor either from random noise or a file
+        var latentTensor: Tensor = if (randomSeed != null) {
+            // Generate random noise with given seed for reproducibility
             val noiseArray = generateGaussianNoise(1, 4, 64, 64, randomSeed)
-
-            // Convert the 4D array to a flat FloatArray
             val flattenedNoise = noiseArray.flatten().toFloatArray()
-
-            // Create a Tensor from the flattened array with proper shape
-            latentTensor = Tensor.fromBlob(
-                flattenedNoise,
-                longArrayOf(1, 4, 64, 64)
-            )
+            Tensor.fromBlob(flattenedNoise, longArrayOf(1, 4, 64, 64))
         } else {
-            latentTensor = LatentUtil.loadLatentsFromFile(context, "diffusion/latents.bin")
+            // Use pre-defined latents from file
+            LatentUtil.loadLatentsFromFile(context, "diffusion/latents.bin")
         }
 
-
-        //val latenTensorFloat = latentTensor.dataAsFloatArray
-
+        // Set up diffusion scheduler
         scheduler.setTimesteps(numSteps)
-        var timeSteps = scheduler.getTimeSteps()
-        println("Timesteps: ${timeSteps?.joinToString()}")
+        val timeSteps = scheduler.getTimeSteps() ?: return null
 
+        // Initialize UNet ONNX runtime
         val unetPath = FileUtils.fetchUnetAssetPath()
-        if (unetPath != null) {
-            // Proceed to initialize UNET session with the file
-            Log.d("UNETSession", "Initializing UNET session with file: $unetPath")
-            // Example: Initialize your ONNX session here
-            // unetSession.initialize(unetFile)
-        } else {
+        if (unetPath == null) {
             Log.e("UNETSession", "Failed to initialize UNET session: File not found")
+            return null
         }
+
         val ortEnv = OrtEnvironment.getEnvironment()
         val ortSession = ortEnv.createSession(unetPath, OrtSession.SessionOptions())
+        Log.d("UNETSession", "Initialized UNET session with file: $unetPath")
 
+        // Get initial data from latent tensor
+        var data = latentTensor.dataAsFloatArray
 
-// 1) Create the UNet session if you haven't already:
-        val sessionOptions = OrtSession.SessionOptions()
-        println("SessionOptions: $sessionOptions")
-        //val unetSession = ortEnv.createSession(unetPath, sessionOptions)
-        //To DO:  This path is  wrong - i need to get the path of the onnx model
-
-
-// Assuming scaledLatentsTensor is your initial Tensor
+        // Prepare for batch processing (doubled for classifier-free guidance)
         val shape = latentTensor.shape()
-        val newBatchSize = shape[0] * 2 // Double the batch size
-
-// Create a new shape with the doubled batch size
+        val newBatchSize = shape[0] * 2 // Double the batch size for guidance
         val newShape = LongArray(shape.size) { index ->
             if (index == 0) newBatchSize.toLong() else shape[index]
         }
 
-        // Get the data as a FloatArray
-        var data = latentTensor.dataAsFloatArray
-
-
-
+        // Set guidance scale for classifier-free guidance
         val guidanceScale = 7.5f
-        if (timeSteps != null) {
-            var counter = 1
-            for(timestep in timeSteps){
-                println("current timestep $timestep")
-                progressCallback(counter, timeSteps.size)
-                counter = counter + 1
-                // Create a new FloatArray to hold the concatenated data
-                val combinedData = FloatArray(data.size * 2)
 
-                // Copy the original data twice into the new array
-                System.arraycopy(data, 0, combinedData, 0, data.size)
-                System.arraycopy(data, 0, combinedData, data.size, data.size)
+        // Main diffusion loop
+        var counter = 1
+        for (timestep in timeSteps) {
+            // Update progress
+            progressCallback(counter, timeSteps.size)
+            counter++
 
-                val latentModelInput = Tensor.fromBlob(combinedData, newShape)
-                println("Latent Model Input Shape: ${latentModelInput.shape().contentToString()}")
-                val latentModelInputFloat = latentModelInput.dataAsFloatArray
+            // 1. Create doubled batch for classifier-free guidance
+            val combinedData = FloatArray(data.size * 2)
+            System.arraycopy(data, 0, combinedData, 0, data.size)
+            System.arraycopy(data, 0, combinedData, data.size, data.size)
+            val latentModelInput = Tensor.fromBlob(combinedData, newShape)
+            val latentModelInputFloat = latentModelInput.dataAsFloatArray
 
-                val latentBuffer = FloatBuffer.wrap(latentModelInputFloat)
-                val combinedBuffer = FloatBuffer.wrap(encodedPrompt)
+            // 2. Prepare inputs for UNet
+            val latentBuffer = FloatBuffer.wrap(latentModelInputFloat)
+            val combinedBuffer = FloatBuffer.wrap(encodedPrompt)
 
-                // 2. Create input map for ONNX
-                val inputName = ortSession.inputNames
-                val latentOnnxTensor = OnnxTensor.createTensor(ortEnv, latentBuffer, newShape)
-                val tensorShape = latentOnnxTensor.info.shape
-                println("Latent Onnx Tensor Shape: ${tensorShape.contentToString()}")
-                // Create a scalar OnnxTensor for timestep
-                val timestepScalarValue = timestep.toLong()
-                val timestepBuffer = LongBuffer.allocate(1) // Allocate a buffer for one Long
-                timestepBuffer.put(timestepScalarValue)     // Put the scalar value into the buffer
-                timestepBuffer.rewind()                     // Reset buffer position to the beginning
+            // Create ONNX tensors
+            val latentOnnxTensor = OnnxTensor.createTensor(ortEnv, latentBuffer, newShape)
 
-                // Create an OnnxTensor with an empty shape (scalar)
-                val timestepOnnxTensor = OnnxTensor.createTensor(
-                    ortEnv,
-                    timestepBuffer,
-                    longArrayOf() // Empty shape for scalar
-                )
+            // Create timestep tensor (as scalar)
+            val timestepScalarValue = timestep.toLong()
+            val timestepBuffer = LongBuffer.allocate(1)
+            timestepBuffer.put(timestepScalarValue)
+            timestepBuffer.rewind()
+            val timestepOnnxTensor = OnnxTensor.createTensor(
+                ortEnv,
+                timestepBuffer,
+                longArrayOf() // Empty shape for scalar
+            )
 
-                println("Timestep Onnx Tensor Shape: ${timestepOnnxTensor.info.shape.contentToString()}")
+            // Create text embedding tensor
+            val combinedOnnxTensor = OnnxTensor.createTensor(ortEnv, combinedBuffer, encodedPromptShape)
 
+            // 3. Run UNet inference
+            val inputs = mapOf(
+                "sample" to latentOnnxTensor,
+                "timestep" to timestepOnnxTensor,
+                "encoder_hidden_states" to combinedOnnxTensor
+            )
 
-                val combinedOnnxTensor = OnnxTensor.createTensor(ortEnv, combinedBuffer, encodedPromptShape)
-                println("combined Onnx Tensor Shape: ${combinedOnnxTensor.info.shape.contentToString()}")
+            val output = ortSession.run(inputs)
 
-                println("Input: $inputName")
-                val inputs = mapOf(
-                    "sample" to latentOnnxTensor,
-                    "timestep" to timestepOnnxTensor,
-                    "encoder_hidden_states" to combinedOnnxTensor
-                )
-                println("Running inferencing...")
+            // 4. Process UNet output
+            val noisePredTensor = output?.get(0) as OnnxTensor
+            val noisePredShape = noisePredTensor.info.shape
 
-                val output = ortSession.run(inputs)
-                println("Completed inferencing")
+            // 5. Process noise prediction for classifier-free guidance
+            val noisePredBuffer = noisePredTensor.floatBuffer
+            val batchSize = noisePredShape[0].toInt()
+            val channelSize = noisePredShape[1].toInt()
+            val height = noisePredShape[2].toInt()
+            val width = noisePredShape[3].toInt()
+            val channelDataSize = channelSize * height * width
+            val splitSize = batchSize / 2
 
-                // 4. Process the output
-                val noisePredTensor  = output?.get(0) as OnnxTensor
-                val noisePredShape = noisePredTensor.info.shape
-                println("Noise Prediction Shape: ${noisePredShape.contentToString()}")
+            // Split into unconditional and conditional noise predictions
+            val noisePredUncondBuffer = FloatBuffer.allocate(splitSize * channelDataSize)
+            val noisePredTextBuffer = FloatBuffer.allocate(splitSize * channelDataSize)
 
-                // Access the FloatBuffer while preserving shape information
-                val noisePredBuffer = noisePredTensor.floatBuffer
-
-                // No need to create a new FloatArray here
-
-                // 5. Split noise prediction for guidance (using shape information)
-                val batchSize = noisePredShape[0].toInt()
-                val channelSize = noisePredShape[1].toInt()
-                val height = noisePredShape[2].toInt()
-                val width = noisePredShape[3].toInt()
-                val channelDataSize = channelSize * height * width // Size of data for one batch
-                val splitSize = batchSize / 2 // Assuming batch size is always even
-
-                // Create buffers for the unconditional and conditional noise predictions
-                val noisePredUncondBuffer = FloatBuffer.allocate(splitSize * channelDataSize)
-                val noisePredTextBuffer = FloatBuffer.allocate(splitSize * channelDataSize)
-
-                // Manually split the data based on the shape
-                for (i in 0 until splitSize) {
-                    noisePredBuffer.position(i * channelDataSize)
-                    val tempUncondBuffer = noisePredBuffer.slice()
-                    tempUncondBuffer.limit(channelDataSize)
-                    noisePredUncondBuffer.put(tempUncondBuffer)
-                }
-                for (i in splitSize until batchSize) {
-                    noisePredBuffer.position(i * channelDataSize)
-                    val tempTextBuffer = noisePredBuffer.slice()
-                    tempTextBuffer.limit(channelDataSize)
-                    noisePredTextBuffer.put(tempTextBuffer)
-                }
-                noisePredUncondBuffer.rewind()
-                noisePredTextBuffer.rewind()
-
-                // Convert the split buffers to FloatArrays for guidance calculation
-                val noisePredUncond = FloatArray(noisePredUncondBuffer.remaining())
-                noisePredUncondBuffer.get(noisePredUncond)
-                val noisePredText = FloatArray(noisePredTextBuffer.remaining())
-                noisePredTextBuffer.get(noisePredText)
-
-                // 6. Perform guidance
-                val guidedNoisePred = noisePredUncond.mapIndexed { index, uncond ->
-                    uncond + guidanceScale * (noisePredText[index] - uncond)
-                }.toFloatArray()
-
-                // 7. Compute the previous noisy sample x_t -> x_t-1 using the scheduler
-                // Create a new tensor for guidedNoisePred with the correct shape
-                val guidedNoisePredTensor = Tensor.fromBlob(
-                    guidedNoisePred,
-                    longArrayOf(splitSize.toLong(), channelSize.toLong(), height.toLong(), width.toLong())
-                )
-                // 8. Compute the previous noisy sample x_t -> x_t-1 using the scheduler
-                latentTensor = scheduler.step(
-                    guidedNoisePredTensor,
-                    timestep,
-                    latentTensor
-                )
-
-                println("Scaled Latents Tensor Shape: ${latentTensor.shape().contentToString()}")
-                data = latentTensor.dataAsFloatArray
+            // Extract unconditional and conditional parts
+            for (i in 0 until splitSize) {
+                noisePredBuffer.position(i * channelDataSize)
+                val tempUncondBuffer = noisePredBuffer.slice()
+                tempUncondBuffer.limit(channelDataSize)
+                noisePredUncondBuffer.put(tempUncondBuffer)
             }
-        }
-        ortSession.close()
-        println("First 10 values: ${data.take(10).joinToString()}")
-        println("Last 10 values: ${data.takeLast(10).joinToString()}")
-        progressCallback(-1, -1)
-        // --- VAE Decoding ---
+            for (i in splitSize until batchSize) {
+                noisePredBuffer.position(i * channelDataSize)
+                val tempTextBuffer = noisePredBuffer.slice()
+                tempTextBuffer.limit(channelDataSize)
+                noisePredTextBuffer.put(tempTextBuffer)
+            }
+            noisePredUncondBuffer.rewind()
+            noisePredTextBuffer.rewind()
 
-        // 1. Scale the latents
+            // Convert to arrays
+            val noisePredUncond = FloatArray(noisePredUncondBuffer.remaining())
+            noisePredUncondBuffer.get(noisePredUncond)
+            val noisePredText = FloatArray(noisePredTextBuffer.remaining())
+            noisePredTextBuffer.get(noisePredText)
+
+            // 6. Apply classifier-free guidance formula
+            val guidedNoisePred = noisePredUncond.mapIndexed { index, uncond ->
+                uncond + guidanceScale * (noisePredText[index] - uncond)
+            }.toFloatArray()
+
+            // 7. Create tensor for guided prediction
+            val guidedNoisePredTensor = Tensor.fromBlob(
+                guidedNoisePred,
+                longArrayOf(splitSize.toLong(), channelSize.toLong(), height.toLong(), width.toLong())
+            )
+
+            // 8. Compute the previous noisy sample using the scheduler
+            latentTensor = scheduler.step(
+                guidedNoisePredTensor,
+                timestep,
+                latentTensor
+            )
+
+            // Update data for next iteration
+            data = latentTensor.dataAsFloatArray
+        }
+
+        // Clean up ONNX resources
+        ortSession.close()
+
+        // Signal completion
+        progressCallback(-1, -1)
+
+        // --- VAE Decoding phase ---
+
+        // 1. Scale the latents for VAE
         val scalingFactor = 1 / 0.18215f
         val scaledVAEData = data.map { it * scalingFactor }.toFloatArray()
 
-        println("Scaled VAE Data (first 10 values): ${scaledVAEData.take(10).joinToString()}")
-        println("Scaled VAE Data (last 10 values): ${scaledVAEData.takeLast(10).joinToString()}")
-
+        // 2. Set up VAE decoder
         val vaePath = FileUtils.getFilePath(context, "diffusion/vae_onnx.onnx")
         val vaeOrtSession = ortEnv.createSession(vaePath, OrtSession.SessionOptions())
 
-        // 2. Create an ONNX tensor for the scaled latents
+        // 3. Create tensor for VAE input
         val vaeLatentTensor = OnnxTensor.createTensor(
             ortEnv,
             FloatBuffer.wrap(scaledVAEData),
-            latentTensor.shape() // Use the shape from before denoising
+            latentTensor.shape()
         )
 
-        // 3. Prepare the input for the VAE
+        // 4. Prepare VAE input
         val vaeInputs = mapOf(
             vaeOrtSession.inputNames.first() to vaeLatentTensor
         )
 
-        println("running vae inference")
+        // 5. Run VAE inference
         val vaeOutput = vaeOrtSession.run(vaeInputs)
-        println("completed vae inference")
 
+        // 6. Process VAE output
         val vaeOutputTensor = vaeOutput[0] as? OnnxTensor
-        // Get and print the shape of the VAE output tensor
         val vaeOutputShape = vaeOutputTensor?.info?.shape
-        println("VAE Output Shape: ${vaeOutputShape.contentToString()}")
-
-        println("First 10 values: ${vaeOutputTensor?.floatBuffer?.array()?.take(10)?.joinToString()}")
-        println("Last 10 values: ${vaeOutputTensor?.floatBuffer?.array()?.takeLast(10)?.joinToString()}")
-
-
         val vaeOutputData = vaeOutputTensor?.floatBuffer
+
+        // Clean up resources
         vaeOrtSession.close()
         ortEnv.close()
-        // Convert VAE output to an image
-        if(vaeOutputData != null && vaeOutputShape != null) {
-            val image = convertToImage(vaeOutputData, vaeOutputShape)
-            return image
+
+        // 7. Convert output to bitmap image
+        if (vaeOutputData != null && vaeOutputShape != null) {
+            return convertToImage(vaeOutputData, vaeOutputShape)
         }
 
         return null
     }
+
+    /**
+     * Converts VAE output tensor to a Bitmap image
+     *
+     * @param data The VAE output data as a FloatBuffer
+     * @param shape The shape of the VAE output tensor
+     * @return The generated image as a Bitmap
+     */
     private fun convertToImage(data: FloatBuffer, shape: LongArray): Bitmap {
-        // Assuming the output shape is [batchSize, channels, height, width]
+        // Extract dimensions from shape (NCHW format)
         val batchSize = shape[0].toInt()
         val channels = shape[1].toInt()
         val height = shape[2].toInt()
@@ -379,22 +358,24 @@ class DiffusionPipeline (
 
         require(batchSize == 1) { "Only batch size 1 is supported" }
 
+        // Create bitmap for the output image
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 
-        // Convert FloatBuffer to FloatArray for easier access
+        // Convert buffer to array for easier access
         val dataArray = FloatArray(data.remaining())
         data.get(dataArray)
-        data.rewind() // Reset buffer position if needed elsewhere
+        data.rewind()
 
         val numPixels = height * width
 
+        // Process each pixel
         for (h in 0 until height) {
             for (w in 0 until width) {
                 val pixelIndex = h * width + w
 
                 when (channels) {
                     3 -> {
-                        // Calculate indices for each channel in NCHW layout
+                        // RGB format - calculate indices for each channel in NCHW layout
                         val rIndex = pixelIndex
                         val gIndex = numPixels + pixelIndex
                         val bIndex = 2 * numPixels + pixelIndex
@@ -411,7 +392,7 @@ class DiffusionPipeline (
                         bitmap.setPixel(w, h, Color.rgb(r, g, b))
                     }
                     1 -> {
-                        // Grayscale conversion
+                        // Grayscale format
                         val grayValue = dataArray[pixelIndex]
                         val gray = ((grayValue * 0.5f + 0.5f).coerceIn(0f, 1f) * 255).toInt()
                         bitmap.setPixel(w, h, Color.rgb(gray, gray, gray))
