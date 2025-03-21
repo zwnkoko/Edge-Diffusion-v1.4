@@ -43,17 +43,19 @@ import kotlinx.coroutines.withContext
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     viewModel: DiffusionViewModel = viewModel()
 ) {
-    val seedOption = listOf("Seed 0", "Random", )
-    var selectedSeed by remember { mutableStateOf("Random") }
+    val seedOption = listOf("x86 Seed 0", "Custom" )
+    var selectedSeed by remember { mutableStateOf("Custom") }
     var denoiseSteps by remember { mutableIntStateOf(20) }
     var promptText by remember { mutableStateOf("") }
     var statusProgress by remember { mutableStateOf(listOf<String>("Status...ready")) }
@@ -63,7 +65,7 @@ fun MainScreen(
     var showNegativePrompt by remember { mutableStateOf(false) }
     var negativePromptText by remember { mutableStateOf("") }
     var showErrorDialog by remember { mutableStateOf(false) }
-
+    var customSeed by remember { mutableStateOf("42") }
     val diffusionPipeline = viewModel.diffusionPipeline
 
 
@@ -89,8 +91,8 @@ fun MainScreen(
             val (encodedPromptData, encodedPromptShape)  = withContext(Dispatchers.IO) {
                 diffusionPipeline.encodePrompt(promptText, negativePromptText)
             }
-
-            // Execution returns back to mainthread here
+            println("encodedPromptData: $encodedPromptData")
+            // Execution returns back to main thread here
             if (encodedPromptData == null || encodedPromptShape == null) {
                 statusProgress = statusProgress + listOf("Encoding prompt... failed")
                 return@launch
@@ -116,7 +118,7 @@ fun MainScreen(
 
                         }
                     },
-                    randomSeed = selectedSeed == "Random"
+                    randomSeed = if (selectedSeed == "Random") null else customSeed.toLong()
                 )
             }
 
@@ -229,6 +231,8 @@ fun MainScreen(
                         onValueChange = { option -> selectedSeed = option },
                         textStyle = MaterialTheme.typography.bodySmall
                     )
+                    // Show text field for custom seed when "Seed 0" is selected
+
                 }
             }
 
@@ -276,10 +280,37 @@ fun MainScreen(
             }
             Row (
                 verticalAlignment = Alignment.CenterVertically ,
-                horizontalArrangement = Arrangement.End,
-                modifier = Modifier.fillMaxWidth().padding(end = 28.dp)){
+
+                modifier = Modifier.padding(horizontal = 28.dp)){
+                if (selectedSeed == "Custom") {
+                        Text(
+                            text = "Enter seed: ",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        TextField(
+                            value = customSeed,
+                            onValueChange = { value ->
+                                // Only allow numeric input
+                                if (value.isEmpty() || value.all { it.isDigit() }) {
+                                    customSeed = value
+                                }
+                            },
+                            modifier = Modifier.width(60.dp).height(45.dp),
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            singleLine = true,
+                            placeholder = {
+                                Text(
+                                    "Seed",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+
+                        )
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                }
                 Text(
-                    text = "Show negative prompt field: ",
+                    text = "Negative prompt: ",
                     style = MaterialTheme.typography.titleMedium,
 
                 )

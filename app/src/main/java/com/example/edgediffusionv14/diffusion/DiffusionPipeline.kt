@@ -135,13 +135,13 @@ class DiffusionPipeline (
         encodedPromptShape : LongArray,
         numSteps: Int,
         progressCallback: (Int, Int) -> Unit = { _, _ -> },
-        randomSeed: Boolean,
+        randomSeed: Long?,
     ): Bitmap? {
         var latentTensor: Tensor
        // var latentTensor = LatentUtil.loadLatentsFromFile(context, "diffusion/latents.bin")
         // Generate noise as a 4D array
-        if (randomSeed){
-            val noiseArray = generateGaussianNoise(1, 4, 64, 64)
+        if (randomSeed != null){
+            val noiseArray = generateGaussianNoise(1, 4, 64, 64, randomSeed)
 
             // Convert the 4D array to a flat FloatArray
             val flattenedNoise = noiseArray.flatten().toFloatArray()
