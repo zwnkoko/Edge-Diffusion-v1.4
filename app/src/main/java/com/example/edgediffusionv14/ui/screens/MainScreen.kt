@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +60,9 @@ fun MainScreen(
     val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
     var generatedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var onsiteLLMAvailable by remember { mutableStateOf<Boolean?>(false) }
+    var showNegativePrompt by remember { mutableStateOf(false) }
+    var negativePromptText by remember { mutableStateOf("") }
+    var showErrorDialog by remember { mutableStateOf(false) }
 
     val diffusionPipeline = viewModel.diffusionPipeline
 
@@ -67,8 +71,12 @@ fun MainScreen(
         onsiteLLMAvailable = isAvailable
     }
 
-
     fun generateImage() {
+        if(promptText.isEmpty()){
+            showErrorDialog = true
+            return
+        }
+
         // To reset UI
         generatedBitmap = null
 //        statusProgress = listOf("Status...ready")
@@ -79,7 +87,7 @@ fun MainScreen(
         viewModel.viewModelScope.launch {
             // Run background thread to prevent UI thread blocking
             val (encodedPromptData, encodedPromptShape)  = withContext(Dispatchers.IO) {
-                diffusionPipeline.encodePrompt(promptText)
+                diffusionPipeline.encodePrompt(promptText, negativePromptText)
             }
 
             // Execution returns back to mainthread here
@@ -266,6 +274,21 @@ fun MainScreen(
                     )
                 }
             }
+            Row (
+                verticalAlignment = Alignment.CenterVertically ,
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth().padding(end = 28.dp)){
+                Text(
+                    text = "Show negative prompt field: ",
+                    style = MaterialTheme.typography.titleMedium,
+
+                )
+                Switch(
+                    checked = showNegativePrompt,
+                    onCheckedChange = { showNegativePrompt = it },
+
+                )
+            }
 
             // Prompt input
             Card(
@@ -276,17 +299,53 @@ fun MainScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(containerColor = surfaceColor)
             ) {
-                PromptField(
-                    modifier = Modifier.padding(12.dp),
-                    rewriteBtn = true,
-                    rewriteBtnStatus = onsiteLLMAvailable == true,
-                    placeHolderText = "Describe image to generate",
-                    promptText = promptText,
-                    onPromptChange = { newPrompt -> promptText = newPrompt },
-                    onRewriteClick = { rewritePrompt() },
-                    onSubmit =  { generateImage() }
-                )
+
+
+                if(! showNegativePrompt){
+                    // positive prompt field
+                    PromptField(
+                        modifier = Modifier.padding(12.dp),
+                        rewriteBtn = true,
+                        rewriteBtnStatus = onsiteLLMAvailable == true,
+                        placeHolderText = "Describe image to generate",
+                        promptText = promptText,
+                        onPromptChange = { newPrompt -> promptText = newPrompt },
+                        onRewriteClick = { rewritePrompt() },
+                        onSubmit =  { generateImage() }
+                    )
+                } else {
+                    // negative prompt field
+                    PromptField(
+                        modifier = Modifier.padding(12.dp),
+                        rewriteBtn = false,
+                        rewriteBtnStatus = false,
+                        placeHolderText = "Enter things to exclude from image",
+                        promptText = negativePromptText,
+                        onPromptChange = { negativePrompt -> negativePromptText = negativePrompt },
+                        onRewriteClick = {},
+                        onSubmit =  { generateImage() }
+                    )
+                }
+
+
+
+
+
             }
+        }
+        if (showErrorDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showErrorDialog = false },
+                title = { Text("Error") },
+                text = { Text("Please enter a prompt before generating an image") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = { showErrorDialog = false }
+                    ) {
+                        Text("OK")
+                    }
+                }
+            )
         }
     }
 }

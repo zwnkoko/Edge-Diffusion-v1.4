@@ -47,13 +47,14 @@ class DiffusionPipeline (
 ){
 
     fun encodePrompt(
-        prompt: String
+        prompt: String,
+        negativePrompt: String = "",
     ): Pair<FloatArray?, LongArray?> {
        tokenizer.clearCache()
 
         //1. Tokenize and encode the text prompt
         var promptList =listOf(prompt)
-        var uncondPromptList = listOf("")
+        var uncondPromptList = listOf(negativePrompt)
 
         val encodedPrompt = tokenizer(
             promptList,
@@ -72,8 +73,8 @@ class DiffusionPipeline (
         val encodedInputIds = encodedPrompt["input_ids"] as List<*>
         val uncondEncodedInputIds = uncondEncodedPrompt["input_ids"] as List<*>
 
-//        println("Encoded input IDs: $encodedInputIds")
-//        println("Unconditional Encoded input IDs: $uncondEncodedInputIds")
+        println("Encoded input IDs: $encodedInputIds")
+        println("Unconditional Encoded input IDs: $uncondEncodedInputIds")
 
         val inputIds = encodedInputIds.map { subList ->
             if (subList is List<*>) {
@@ -164,7 +165,7 @@ class DiffusionPipeline (
         val unetPath = FileUtils.fetchUnetAssetPath()
         if (unetPath != null) {
             // Proceed to initialize UNET session with the file
-            Log.d("UNETSession", "Initializing UNET session with file: ${unetPath}")
+            Log.d("UNETSession", "Initializing UNET session with file: $unetPath")
             // Example: Initialize your ONNX session here
             // unetSession.initialize(unetFile)
         } else {
@@ -173,8 +174,6 @@ class DiffusionPipeline (
         val ortEnv = OrtEnvironment.getEnvironment()
         val ortSession = ortEnv.createSession(unetPath, OrtSession.SessionOptions())
 
-        val noisePredList = mutableListOf<Array<Array<Array<FloatArray>>>>()
-        val latentList = mutableListOf<Array<Array<Array<FloatArray>>>>()
 
 // 1) Create the UNet session if you haven't already:
         val sessionOptions = OrtSession.SessionOptions()
@@ -201,7 +200,7 @@ class DiffusionPipeline (
         if (timeSteps != null) {
             var counter = 1
             for(timestep in timeSteps){
-                println("current timestep ${timestep}")
+                println("current timestep $timestep")
                 progressCallback(counter, timeSteps.size)
                 counter = counter + 1
                 // Create a new FloatArray to hold the concatenated data
