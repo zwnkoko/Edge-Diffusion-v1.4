@@ -8,33 +8,39 @@ import java.lang.StringBuilder
 import java.text.Normalizer
 
 /**
- * A simple wrapper class for token encoding results
- * HuggingFace's BatchEncoding interface - simplified for mobile use
+ * A simple wrapper class for token encoding results following
+ * HuggingFace's BatchEncoding interface, simplified for mobile use.
  */
 class BatchEncoding(private val encoding: Map<String, Any>) {
-    operator fun get(key: String): Any? {
-        return encoding[key]
-    }
+    /**
+     * Retrieves a value by key from the encoding map
+     */
+    operator fun get(key: String): Any? = encoding[key]
 
-    fun keys(): Set<String> {
-        return encoding.keys
-    }
+    /**
+     * Returns all keys in the encoding map
+     */
+    fun keys(): Set<String> = encoding.keys
 }
 
 /**
- * A minimal implementation of CLIP tokenizer for text encoding
- * for mobile use. It handles BPE encoding for text-to-image models.
+ * A minimal implementation of CLIP tokenizer for text encoding in mobile environments.
+ * This tokenizer applies Byte-Pair Encoding (BPE) for text-to-image diffusion models.
+ *
+ * @param context The Android application context
+ * @param vocabFileName Path to the vocabulary file in assets
+ * @param mergesFileName Path to the BPE merges file in assets
  */
 class MinimalCLIPTokenizer(
-    private val context: Context,
+    val context: Context,
     vocabFileName: String,
     mergesFileName: String
 ) {
-    // Mapping between tokens and their IDs
+    // Token-ID mappings
     private val encoder: MutableMap<String, Int> = mutableMapOf()
     private val decoder: MutableMap<Int, String> = mutableMapOf()
 
-    // BPE merge rankings used for tokenization
+    // BPE merge rankings used for tokenization algorithm
     private val bpeRanks: MutableMap<Pair<String, String>, Int> = mutableMapOf()
 
     // Byte-level encoders for UTF-8 handling
@@ -47,83 +53,84 @@ class MinimalCLIPTokenizer(
         "<|endoftext|>" to "<|endoftext|>"
     )
 
-    // Constants for model configuration
-    private val maxLength: Int = 77  // Maximum sequence length
-    private val bosToken: String = "<|startoftext|>"  // Beginning of sequence token
-    private val eosToken: String = "<|endoftext|>"  // End of sequence token
-    private val padToken: String = "<|endoftext|>"  // Padding token (same as EOS)
+    // Special tokens configuration
+    private val bosToken = "<|startoftext|>"  // Beginning of sequence token
+    private val eosToken = "<|endoftext|>"    // End of sequence token
+    private val padToken = "<|endoftext|>"    // Padding token (same as EOS)
 
     // Token IDs for special tokens
     private val bosTokenId: Int
     private val eosTokenId: Int
     private val padTokenId: Int
 
-    // Regex for text tokenization - matches text units (words, punctuation, special tokens)
+    // Regex pattern for initial tokenization of text
     private val pat = Regex(
         """<\|startoftext\|>|<\|endoftext\|>|'s|'t|'re|'ve|'m|'ll|'d|[\p{L}]+|[\p{N}]|[^\s\p{L}\p{N}]+""",
         RegexOption.IGNORE_CASE
     )
 
     init {
-        // Load the vocabulary from assets
+        // Load and parse vocabulary file
         val vocabInputStream = context.assets.open(vocabFileName)
         val vocabReader = BufferedReader(InputStreamReader(vocabInputStream, "UTF-8"))
         val vocabJson = JSONObject(vocabReader.readText())
 
-        // Parse vocabulary file and populate the encoder map
+        // Populate encoder map from JSON
         for (key in vocabJson.keys()) {
             encoder[key] = vocabJson.getInt(key)
         }
         vocabReader.close()
         vocabInputStream.close()
 
-        // Create the decoder map (inverse of encoder)
+        // Create decoder map (inverse of encoder for lookup by ID)
         decoder.putAll(encoder.entries.associate { (k, v) -> v to k })
 
-        // Load BPE merges from assets
+        // Load BPE merges file
         val mergesInputStream = context.assets.open(mergesFileName)
         val mergesReader = BufferedReader(InputStreamReader(mergesInputStream, "UTF-8"))
 
-        // Skip header and load appropriate number of merges
+        // Skip header line and load merges (up to vocabulary size limit)
         val bpeMerges = mergesReader.readLines().drop(1).take(49152 - 256 - 2 + 1)
         mergesReader.close()
         mergesInputStream.close()
 
-        // Build the BPE ranks map
+        // Build BPE ranks map (index determines merge priority)
         bpeMerges.forEachIndexed { index, merge ->
             val parts = merge.split(" ")
             bpeRanks[Pair(parts[0], parts[1])] = index
         }
 
-        // Initialize byte-level encoding maps
+        // Initialize byte encoding maps for UTF-8 handling
         byteEncoder = bytesToUnicode()
         byteDecoder = byteEncoder.entries.associate { (k, v) -> v to k }
 
-        // Get IDs for special tokens
+        // Get IDs for special tokens from vocabulary
         bosTokenId = encoder[bosToken]!!
         eosTokenId = encoder[eosToken]!!
         padTokenId = encoder[padToken]!!
     }
 
     /**
-     * Creates a mapping from bytes to unicode characters
-     * To handle all UTF-8 bytes in a way that avoids
-     * tokenization issues with certain characters
+     * Creates a mapping from bytes to unicode characters.
+     * This ensures all UTF-8 bytes can be represented as single characters,
+     * avoiding tokenization issues with certain byte values.
+     *
+     * @return Map from byte values to unicode character strings
      */
     private fun bytesToUnicode(): Map<Int, String> {
-        // Start with printable ASCII characters
+        // Start with printable ASCII and Latin-1 Supplement characters
         val bs = mutableListOf<Int>().apply {
             // ASCII printable characters (33-126)
-            addAll(generateSequence('!'.code) { if (it == '~'.code) null else it + 1 }.toList())
+            addAll(('!'.code..'~'.code).toList())
             // Latin-1 Supplement characters
-            addAll(generateSequence('¡'.code) { if (it == '¬'.code) null else it + 1 }.toList())
-            addAll(generateSequence('®'.code) { if (it == 'ÿ'.code) null else it + 1 }.toList())
+            addAll(('¡'.code..'¬'.code).toList())
+            addAll(('®'.code..'ÿ'.code).toList())
         }
 
         val cs = bs.toMutableList()
         var n = 0
 
-        // Add remaining bytes (0-255) and map to Unicode characters beyond ASCII
+        // Map remaining bytes (0-255) to Unicode characters beyond ASCII
         for (b in 0 until 256) {
             if (b !in bs) {
                 bs.add(b)
@@ -137,26 +144,34 @@ class MinimalCLIPTokenizer(
     }
 
     /**
-     * Extracts all adjacent pairs from a word
-     * This is a helper for the BPE algorithm
+     * Extracts all adjacent pairs of tokens from a word.
+     * Used as a helper for the BPE algorithm.
+     *
+     * @param word List of tokens to extract pairs from
+     * @return Set of all adjacent token pairs
      */
     fun getPairs(word: List<String>): Set<Pair<String, String>> {
         val pairs = mutableSetOf<Pair<String, String>>()
         var prevChar = word[0]
+
         for (i in 1 until word.size) {
             pairs.add(Pair(prevChar, word[i]))
             prevChar = word[i]
         }
+
         return pairs
     }
 
     /**
-     * Applies Byte-Pair Encoding to a token
-     * This is the core algorithm of the tokenizer that merges character pairs
-     * according to the learned BPE ranks
+     * Applies Byte-Pair Encoding to a token.
+     * This is the core algorithm that recursively merges character pairs
+     * according to the learned BPE ranks until no more merges are possible.
+     *
+     * @param token The string token to encode
+     * @return BPE-encoded string
      */
     fun bpe(token: String): String {
-        // Return cached result if available
+        // Return cached result if available for performance
         if (cache.containsKey(token)) {
             return cache[token]!!
         }
@@ -165,7 +180,7 @@ class MinimalCLIPTokenizer(
         var word = token.dropLast(1).map { it.toString() } + (token.last().toString() + "</w>")
         var pairs = getPairs(word)
 
-        // If no pairs found, just return
+        // If no pairs found, just return with end marker
         if (pairs.isEmpty()) {
             return token + "</w>"
         }
@@ -197,14 +212,12 @@ class MinimalCLIPTokenizer(
                 i = j
 
                 // If we found the bigram, merge it
-                if (i < word.size && word[i] == first && i < word.size - 1 && word[i + 1] == second) {
+                if (i < word.size - 1 && word[i] == first && word[i + 1] == second) {
                     newWord.add(first + second)
                     i += 2
-                } else {
+                } else if (i < word.size) {
                     // Otherwise add current token and move on
-                    if (i < word.size) {
-                        newWord.add(word[i])
-                    }
+                    newWord.add(word[i])
                     i += 1
                 }
             }
@@ -214,7 +227,7 @@ class MinimalCLIPTokenizer(
             pairs = getPairs(word)
 
             // If word reduced to a single token, we're done
-            if (newWord.size == 1) {
+            if (word.size == 1) {
                 break
             }
         }
@@ -226,11 +239,15 @@ class MinimalCLIPTokenizer(
     }
 
     /**
-     * Normalizes and cleans text input for tokenization
-     * Added this to handle whitespace and weird characters uniformly
+     * Normalizes and cleans text input for tokenization.
+     * Handles whitespace and special characters uniformly.
+     *
+     * @param text The raw input text
+     * @return Cleaned text ready for tokenization
      */
     private fun cleanText(text: String): String {
         val output = StringBuilder()
+
         for (char in text) {
             val code = char.code
             // Skip null bytes and replacement characters
@@ -244,22 +261,26 @@ class MinimalCLIPTokenizer(
                 output.append(char)
             }
         }
+
         return output.toString()
     }
 
     /**
-     * Converts text into BPE tokens
-     * This breaks text into initial tokens and then applies BPE
+     * Converts text into BPE tokens.
+     * This breaks text into initial tokens and then applies BPE.
+     *
+     * @param text The input text to tokenize
+     * @return List of BPE tokens
      */
     private fun tokenize(text: String): List<String> {
         val bpeTokens = mutableListOf<String>()
 
-        // Clean and normalize the input text
+        // Clean, normalize, and prepare the text
         val cleanedText = cleanText(text)
         val normalizedText = Normalizer.normalize(cleanedText, Normalizer.Form.NFC)
         val trimmedText = normalizedText.replace("\\s+".toRegex(), " ").trim().lowercase()
 
-        // Split text into initial tokens using regex
+        // Split text into initial tokens using regex pattern
         for (token in pat.findAll(trimmedText).map { it.value }) {
             // Convert each token to bytes and then to Unicode characters
             val encodedToken = token.toByteArray(Charsets.UTF_8).joinToString("") {
@@ -274,8 +295,11 @@ class MinimalCLIPTokenizer(
     }
 
     /**
-     * Encodes text to token IDs
-     * This converts text into a sequence of vocabulary indices
+     * Encodes text to token IDs.
+     * Converts text into a sequence of vocabulary indices with special tokens.
+     *
+     * @param text The input text to encode
+     * @return List of token IDs
      */
     private fun encode(text: String): List<Int> {
         // Handle empty string case
@@ -295,8 +319,14 @@ class MinimalCLIPTokenizer(
     }
 
     /**
-     * Main method to encode batches of text with padding options
-     * This is our public API that processes multiple texts at once
+     * Main method to encode batches of text with padding options.
+     * This is the public API that processes multiple texts at once.
+     *
+     * @param text List of input texts to encode
+     * @param padding Padding strategy ("max_length" or "none")
+     * @param maxLength Maximum sequence length
+     * @param truncation Whether to truncate sequences exceeding maxLength
+     * @return BatchEncoding containing input_ids and attention_mask
      */
     operator fun invoke(
         text: List<String>,
@@ -311,7 +341,7 @@ class MinimalCLIPTokenizer(
             // Encode the text
             var inputIds = encode(singleText)
 
-            // Truncate if needed
+            // Truncate if needed and requested
             if (truncation && inputIds.size > maxLength) {
                 inputIds = inputIds.take(maxLength - 1) + listOf(eosTokenId)
             }
@@ -322,8 +352,10 @@ class MinimalCLIPTokenizer(
             // Apply padding if requested
             if (padding == "max_length") {
                 val paddingLength = maxLength - inputIds.size
-                inputIds = inputIds + List(paddingLength) { padTokenId }
-                attentionMask.addAll(List(paddingLength) { 0 })
+                if (paddingLength > 0) {
+                    inputIds = inputIds + List(paddingLength) { padTokenId }
+                    attentionMask.addAll(List(paddingLength) { 0 })
+                }
             }
 
             batchInputIds.add(inputIds)
@@ -340,118 +372,13 @@ class MinimalCLIPTokenizer(
     }
 
     /**
-     * Decodes token IDs back to text
-     * To help debug tokenization and verify it works correctly
-     */
-    fun decode(tokenIds: List<Int>): String {
-        // Filter out padding and convert IDs back to tokens
-        val tokens = tokenIds.filter { it != padTokenId }.map { decoder[it]!! }
-        val text = tokens.joinToString("")
-
-        // Convert from Unicode representation back to bytes then to UTF-8 string
-        val byteArray = text.map { byteDecoder.getOrDefault(it.toString(), it.code) }
-            .map { it.toByte() }.toByteArray()
-        val decodedText = String(byteArray, Charsets.UTF_8)
-
-        // Clean up word boundaries and return
-        return decodedText.replace("</w>", " ").trim()
-    }
-
-    /**
-     * Debug function to step through BPE process for a token
-     */
-    fun debugBPE(token: String) {
-        println("Debugging BPE for token: $token")
-        if (cache.containsKey(token)) {
-            println("  (Using cached value)")
-            return
-        }
-
-        var word = token.dropLast(1).map { it.toString() } + (token.last().toString() + "</w>")
-        println("  Initial word: $word")
-
-        var pairs = getPairs(word)
-        println("  Initial pairs: $pairs")
-
-        if (pairs.isEmpty()) {
-            println("  No pairs found, returning: $token</w>")
-            return
-        }
-
-        var iteration = 0
-        while (true) {
-            iteration++
-            val bigram = pairs.minByOrNull { bpeRanks.getOrDefault(it, Int.MAX_VALUE) } ?: break
-            println("  Iteration $iteration - Bigram: $bigram")
-
-            if (!bpeRanks.containsKey(bigram)) {
-                println("  Bigram not in bpeRanks, breaking")
-                break
-            }
-
-            val (first, second) = bigram
-            val newWord = mutableListOf<String>()
-            var i = 0
-            while (i < word.size) {
-                val j = word.subList(i, word.size).indexOf(first).takeIf { it >= 0 }?.plus(i) ?: word.size
-                if (j > i) {
-                    newWord.addAll(word.subList(i, j))
-                }
-                i = j
-
-                if (i < word.size && word[i] == first && i < word.size - 1 && word[i + 1] == second) {
-                    newWord.add(first + second)
-                    i += 2
-                } else {
-                    if (i < word.size) {
-                        newWord.add(word[i])
-                    }
-                    i += 1
-                }
-            }
-
-            println("  New word: $newWord")
-
-            if (newWord.size == 1) {
-                println("  Word has size 1, breaking")
-                break
-            }
-
-            word = newWord
-            pairs = getPairs(word)
-            println("  New pairs: $pairs")
-        }
-
-        val result = word.joinToString(" ")
-        println("  Final result: $result")
-        println("-----\n")
-    }
-
-    /**
-     * Utility method that combines tokenization and encoding
-     * without special token handling
-     */
-    fun tokenizeAndEncode(text: String): List<Int> {
-        val bpeTokens = tokenize(text)
-        val ids = mutableListOf(bosTokenId)
-        ids.addAll(bpeTokens.map { encoder.getOrDefault(it, eosTokenId) })
-        ids.add(eosTokenId)
-        return ids
-    }
-
-    /**
-     * Exposes the byteEncoder for debugging purposes
-     * This helped me track down some encoding issues with special characters
-     */
-    fun getByteEncoder(): Map<Int, String> {
-        return byteEncoder
-    }
-
-    /**
-     * Clears the BPE cache
-     * I added this to help with memory management in long-running applications
+     * Clears the BPE cache to help with memory management.
+     * Useful for long-running applications to prevent memory leaks.
      */
     fun clearCache() {
         cache.clear()
+        // Preserve cache entries for special tokens
+        cache["<|startoftext|>"] = "<|startoftext|>"
+        cache["<|endoftext|>"] = "<|endoftext|>"
     }
 }
