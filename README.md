@@ -7,9 +7,11 @@ Designed and developed as part of my Bachelor’s Final Year Project, this app e
 
 
 ## 📸 Screenshots
-<img src="images/1_App_UI.PNG" alt="App UI" width="600"> \
+![App UI](images/1_App_UI.PNG "App UI") \
 *Prompt input screen with customizable parameters*  
 
+![Generated Image](images/demo_pic.PNG "Generated Image") \
+ *Example image generated on-device*  
 
 # ✨ Key Features
 
