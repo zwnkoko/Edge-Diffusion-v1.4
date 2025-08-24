@@ -5,6 +5,12 @@
 Edge Diffusion v1.4 is an Android application that brings the power of Stable Diffusion v1.4 directly to your mobile device - no internet connection required! \
 Designed and developed as part of my Bachelor’s Final Year Project, this app enables fully offline AI image generation, giving users complete control, privacy and creativity on the go.
 
+
+## 📸 Screenshots
+<img src="images/1_App_UI.PNG" alt="App UI" width="600"> \
+*Prompt input screen with customizable parameters*  
+
+
 # ✨ Key Features
 
 - **Local Image Generation** using the Stable Diffusion pipeline — no cloud dependency.
@@ -17,6 +23,7 @@ Designed and developed as part of my Bachelor’s Final Year Project, this app e
 - **Privacy-First Design**: All computations happen on-device, ensuring privacy, security, and zero reliance on external servers.
 - **Offline by Design**: Works without any internet connection — perfect for remote or low-connectivity environments.
 - **LLM-Powered Prompt Enrichment (Optional)**: When connected to a local network, the app can leverage a LAN-hosted Language Model to enhance your prompts with richer details (e.g., colors, physical attributes), improving image quality and accuracy.
+
 
 ## Repository Structure
 
