@@ -13,7 +13,7 @@ Designed and developed as part of my Bachelor’s Final Year Project, this app e
 ![Generated Image](images/demo_pic.PNG "Generated Image") \
  *Example image generated on-device*  
 
-# ✨ Key Features
+## ✨ Key Features
 
 - **Local Image Generation** using the Stable Diffusion pipeline — no cloud dependency.
 - **Stable Diffusion v1.4 Pipeline** – fully implemented in Kotlin and optimized for Android.
@@ -44,7 +44,7 @@ Designed and developed as part of my Bachelor’s Final Year Project, this app e
 ![App Architecture](images/Android_App_Architecture.PNG "App Architecture") \
  *App Architecture*  
 
- # 🖼 Image Quality vs Denoising Steps
+ ## 🖼 Image Quality vs Denoising Steps
 
 Below are examples showing how image quality improves as the number of denoising steps increases:
 
