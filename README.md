@@ -1,10 +1,22 @@
-# Edge Diffusion v1.4
+# 📱  Edge Diffusion v1.4
 
-A mobile implementation of Stable Diffusion v1.4 for Android devices with local prompt enhancement capabilities.
+> *AI Image Generation in Your Pocket – Fully Offline*
 
-## Project Overview
+Edge Diffusion v1.4 is an Android application that brings the power of Stable Diffusion v1.4 directly to your mobile device - no internet connection required! \
+Designed and developed as part of my Bachelor’s Final Year Project, this app enables fully offline AI image generation, giving users complete control, privacy and creativity on the go.
 
-Edge Diffusion is an Android application that runs Stable Diffusion v1.4 directly on mobile devices. The project optimizes diffusion models for edge computing by converting them to mobile-friendly formats and includes a local LLM-based prompt enhancement service to improve image generation quality.
+# ✨ Key Features
+
+- **Local Image Generation** using the Stable Diffusion pipeline — no cloud dependency.
+- **Stable Diffusion v1.4 Pipeline** – fully implemented in Kotlin and optimized for Android.
+- **Customizable Parameters** for creative control:
+    - Prompt input for text-to-image generation
+    - Denoising steps for fine-tuned detail
+    - Seed control for reproducibility
+    - Advanced settings (see screenshots below)
+- **Privacy-First Design**: All computations happen on-device, ensuring privacy, security, and zero reliance on external servers.
+- **Offline by Design**: Works without any internet connection — perfect for remote or low-connectivity environments.
+- **LLM-Powered Prompt Enrichment (Optional)**: When connected to a local network, the app can leverage a LAN-hosted Language Model to enhance your prompts with richer details (e.g., colors, physical attributes), improving image quality and accuracy.
 
 ## Repository Structure
 
