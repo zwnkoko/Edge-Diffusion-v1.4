@@ -35,3 +35,27 @@ Designed and developed as part of my Bachelor’s Final Year Project, this app e
 | LAN Server (Optional) | FastAPI, TinyLlama                         |
 | Other Tools           | Android Studio, Gradle, Visual Studio Code |
 
+## 🏗 Architecture Diagram
+
+![System Architecture](images/System_Architecture.PNG "System Architecture") \
+ *System Architecture*  
+
+ 
+![App Architecture](images/Android_App_Architecture.PNG "App Architecture") \
+ *App Architecture*  
+
+ # 🖼 Image Quality vs Denoising Steps
+
+Below are examples showing how image quality improves as the number of denoising steps increases:
+
+> **Tip:** Typically, **20 steps** is a balanced trade-off between quality and speed.
+
+
+### Example 1: Astronaut Riding a Horse
+![Astronaut Riding a Horse](images/Denosing_Steps_1.PNG "Astronaut Riding a Horse")
+
+### Example 2: Oil Painting of Nature
+![Oil Painting of Nature](images/Denosing_Steps_2.PNG "Oil Painting of Nature")
+
+### Example 3: Futuristic City
+![Futuristic City](images/Denosing_Steps_3.PNG "Futuristic City")
