@@ -26,6 +26,15 @@ Designed and developed as part of my Bachelor’s Final Year Project, this app e
 - **Offline by Design**: Works without any internet connection — perfect for remote or low-connectivity environments.
 - **LLM-Powered Prompt Enrichment (Optional)**: When connected to a local network, the app can leverage a LAN-hosted Language Model to enhance your prompts with richer details (e.g., colors, physical attributes), improving image quality and accuracy.
 
+## 🛠 Tech Stack
+
+| Category              | Technologies                               |
+| --------------------- | ------------------------------------------ |
+| Mobile App            | Kotlin, Jetpack Compose                    |
+| AI & Model Deployment | PyTorch, ONNX, Hugging Face                |
+| LAN Server (Optional) | FastAPI, TinyLlama                         |
+| Other Tools           | Android Studio, Gradle, Visual Studio Code |
+
 
 ## Repository Structure
 
